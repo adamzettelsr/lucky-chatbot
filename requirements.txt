@@ -1,0 +1,6 @@
+streamlit
+openai
+HEAD
+python-dotenv
+python-dotenv
+2a3c09364cfb1314177bbcefc5369bf2c0b94702
