@@ -1,14 +1,14 @@
 import os
 import json
-import openai
-import streamlit as st
 from dotenv import load_dotenv
+from openai import OpenAI
+import streamlit as st
 
 # Load environment variables
 load_dotenv()
-openai.api_key = os.getenv("OPENAI_API_KEY")
+client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
 
-# Load HAWS knowledge base
+# Load knowledge base
 def load_knowledge_base(filepath="haws_knowledge.json"):
     if not os.path.exists(filepath):
         return {}
@@ -17,7 +17,7 @@ def load_knowledge_base(filepath="haws_knowledge.json"):
 
 knowledge = load_knowledge_base()
 
-# Direct FAQ override
+# Fallback override for FAQ-style questions
 def check_faq_overrides(user_input):
     input_lower = user_input.lower()
     keywords = [
@@ -35,7 +35,7 @@ def check_faq_overrides(user_input):
         )
     return None
 
-# Match relevant sections
+# Match relevant content based on input
 def get_relevant_sections(user_input, knowledge_sections):
     input_lower = user_input.lower()
     matches = []
@@ -106,15 +106,16 @@ def ask_openai(user_input, knowledge_sections):
         "Report Abuse": "https://hawspets.org/report-abuse/"
     }
 
-    included_urls = [section_url_map[title] for title, _ in selected if title in section_url_map]
+    included_urls = [
+        section_url_map[title]
+        for title, _ in selected if title in section_url_map
+    ]
 
-    url_instruction = ""
-    if included_urls:
-        url_instruction = (
-            "If you're unable to fully answer the question, include a link to the most relevant section like "
-            f"{included_urls[0]} — only use one link, and make sure it directly relates to the question being asked. "
-            "Phrase it naturally, in a friendly tone."
-        )
+    url_instruction = (
+        f"If you're unable to fully answer the question, include a link to the most relevant section like "
+        f"{included_urls[0]} — only use one link, and make sure it directly relates to the question being asked. "
+        "Phrase it naturally, in a friendly tone."
+    ) if included_urls else ""
 
     prompt = (
         f"You are Lucky, the friendly chatbot at HAWS (Humane Animal Welfare Society). "
@@ -127,22 +128,31 @@ def ask_openai(user_input, knowledge_sections):
         f"User: {user_input}\nLucky:"
     )
 
-    response = openai.ChatCompletion.create(
+    response = client.chat.completions.create(
         model="gpt-3.5-turbo",
         messages=[{"role": "user", "content": prompt}],
         temperature=0.7,
         max_tokens=500
     )
 
-    return response.choices[0].message["content"].strip()
+    return response.choices[0].message.content.strip()
 
 # Streamlit UI
-st.title("🐾 Lucky the HAWS Chatbot")
-st.write("Ask me anything about HAWS adoption, events, volunteering, and more!")
+st.set_page_config(page_title="Lucky Chatbot 🐾", layout="centered")
+st.title("🐶 Lucky the HAWS Chatbot")
+st.markdown("Ask Lucky a question about adoptions, fostering, events, and more at [hawspets.org](https://hawspets.org)!")
 
-user_input = st.text_input("You:", placeholder="What are your adoption hours tomorrow?")
+if "chat_history" not in st.session_state:
+    st.session_state.chat_history = []
+
+user_input = st.text_input("You:", placeholder="Ask me anything about HAWS...")
 
 if user_input:
-    with st.spinner("Lucky is thinking..."):
-        response = ask_openai(user_input, knowledge)
-        st.markdown(f"**Lucky:** {response}")
+    st.session_state.chat_history.append(("user", user_input))
+    reply = ask_openai(user_input, knowledge)
+    st.session_state.chat_history.append(("assistant", reply))
+
+for role, message in st.session_state.chat_history:
+    with st.chat_message(role):
+        st.markdown(message)
+
