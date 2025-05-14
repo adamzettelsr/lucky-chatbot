@@ -148,11 +148,6 @@ if "chat_history" not in st.session_state:
 user_input = st.text_input("You:", placeholder="Ask me anything about HAWS...")
 
 if user_input:
-    st.session_state.chat_history.append(("user", user_input))
-    reply = ask_openai(user_input, knowledge)
-    st.session_state.chat_history.append(("assistant", reply))
-
-for role, message in st.session_state.chat_history:
-    with st.chat_message(role):
-        st.markdown(message)
-
+    with st.spinner("Lucky is thinking..."):
+        response = ask_openai(user_input, knowledge)
+        st.markdown(f"**Lucky:** {response}")
